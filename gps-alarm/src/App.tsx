@@ -1,10 +1,34 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, FormEvent, MouseEvent, KeyboardEvent } from 'react';
 import { MapPin, Search, Navigation, BellRing, X, AlertTriangle, Loader2, Volume2, Map as MapIcon, Crosshair } from 'lucide-react';
 
-// Fórmula de Haversine para calcular distância em metros
-const calculateDistance = (lat1, lon1, lat2, lon2) => {
+// Interfaces TypeScript para definir os tipos de dados
+interface Coordinates {
+  lat: number;
+  lon: number;
+}
+
+interface Destination extends Coordinates {
+  name: string;
+}
+
+interface Place {
+  display_name: string;
+  lat: string;
+  lon: string;
+}
+
+interface MapProps {
+  mapCenter: [number, number];
+  isTracking: boolean;
+  destination: Destination | null;
+  currentLocation: Coordinates | null;
+  radius: number;
+}
+
+// Fórmula de Haversine com os tipos declarados explicitamente
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
   const R = 6371e3;
-  const rad = (deg) => (deg * Math.PI) / 180;
+  const rad = (deg: number): number => (deg * Math.PI) / 180;
   const dLat = rad(lat2 - lat1);
   const dLon = rad(lon2 - lon1);
   const a =
@@ -15,14 +39,13 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
   return R * c;
 };
 
-// Componente de Mapa Nativo (Carrega o Leaflet dinamicamente para evitar erros de compilação/dependências não encontradas)
-const NativeLeafletMap = ({ mapCenter, isTracking, destination, currentLocation, radius }) => {
-  const mapContainerRef = useRef(null);
-  const mapInstanceRef = useRef(null);
-  const elementsRef = useRef({ destMarker: null, destCircle: null, userMarker: null, line: null });
-  const [isLeafletLoaded, setIsLeafletLoaded] = useState(false);
+// Componente de Mapa Nativo
+const NativeLeafletMap = ({ mapCenter, isTracking, destination, currentLocation, radius }: MapProps) => {
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const elementsRef = useRef<any>({ destMarker: null, destCircle: null, userMarker: null, line: null });
+  const [isLeafletLoaded, setIsLeafletLoaded] = useState<boolean>(false);
 
-  // Valores primitivos para o array de dependências do useEffect
   const centerLat = mapCenter[0];
   const centerLon = mapCenter[1];
   const destLat = destination?.lat;
@@ -30,9 +53,8 @@ const NativeLeafletMap = ({ mapCenter, isTracking, destination, currentLocation,
   const currLat = currentLocation?.lat;
   const currLon = currentLocation?.lon;
 
-  // Carrega o Leaflet JS e CSS dinamicamente do CDN
   useEffect(() => {
-    if (window.L) {
+    if ((window as any).L) {
       setIsLeafletLoaded(true);
       return;
     }
@@ -57,13 +79,11 @@ const NativeLeafletMap = ({ mapCenter, isTracking, destination, currentLocation,
     loadLeaflet();
   }, []);
 
-  // Inicializa e atualiza o mapa
   useEffect(() => {
     if (!isLeafletLoaded || !mapContainerRef.current) return;
 
-    const L = window.L;
+    const L = (window as any).L;
 
-    // Inicializa o mapa apenas uma vez
     if (!mapInstanceRef.current) {
       mapInstanceRef.current = L.map(mapContainerRef.current, {
         zoomControl: false,
@@ -74,11 +94,8 @@ const NativeLeafletMap = ({ mapCenter, isTracking, destination, currentLocation,
     }
 
     const map = mapInstanceRef.current;
-
-    // Atualiza a visualização do centro
     map.flyTo([centerLat, centerLon], isTracking ? 16 : 13, { animate: true, duration: 1.5 });
 
-    // Configuração dos ícones
     const destIcon = L.icon({
       iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
       iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
@@ -94,8 +111,7 @@ const NativeLeafletMap = ({ mapCenter, isTracking, destination, currentLocation,
 
     const els = elementsRef.current;
 
-    // Destino: Marcador e Raio
-    if (destLat && destLon) {
+    if (destLat !== undefined && destLon !== undefined) {
       if (!els.destMarker) {
         els.destMarker = L.marker([destLat, destLon], { icon: destIcon }).addTo(map);
         els.destCircle = L.circle([destLat, destLon], {
@@ -111,8 +127,7 @@ const NativeLeafletMap = ({ mapCenter, isTracking, destination, currentLocation,
       if (els.destCircle) { map.removeLayer(els.destCircle); els.destCircle = null; }
     }
 
-    // Utilizador: Marcador
-    if (currLat && currLon) {
+    if (currLat !== undefined && currLon !== undefined) {
       if (!els.userMarker) {
         els.userMarker = L.marker([currLat, currLon], { icon: userIcon }).addTo(map);
       } else {
@@ -122,8 +137,7 @@ const NativeLeafletMap = ({ mapCenter, isTracking, destination, currentLocation,
       if (els.userMarker) { map.removeLayer(els.userMarker); els.userMarker = null; }
     }
 
-    // Linha de Rastreamento (entre utilizador e destino)
-    if (isTracking && currLat && currLon && destLat && destLon) {
+    if (isTracking && currLat !== undefined && currLon !== undefined && destLat !== undefined && destLon !== undefined) {
       if (!els.line) {
         els.line = L.polyline([
           [currLat, currLon],
@@ -145,43 +159,39 @@ const NativeLeafletMap = ({ mapCenter, isTracking, destination, currentLocation,
 };
 
 export default function App() {
-  // Estados da interface e destino
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [destination, setDestination] = useState(null);
-  const [radius, setRadius] = useState(500); // metros
+  // AQUI ESTÁ O SEGREDO: Usar Generics <Tipo> garante que o TypeScript não falha
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchResults, setSearchResults] = useState<Place[]>([]);
+  const [isSearching, setIsSearching] = useState<boolean>(false);
+  const [destination, setDestination] = useState<Destination | null>(null);
+  const [radius, setRadius] = useState<number>(500);
 
-  // Estados de rastreamento e permissões
-  const [isTracking, setIsTracking] = useState(false);
-  const [currentLocation, setCurrentLocation] = useState(null);
-  const [distance, setDistance] = useState(null);
-  const [isRinging, setIsRinging] = useState(false);
-  const [permissionStatus, setPermissionStatus] = useState('prompt'); // prompt, granted, denied
-  const [error, setError] = useState('');
+  const [isTracking, setIsTracking] = useState<boolean>(false);
+  const [currentLocation, setCurrentLocation] = useState<Coordinates | null>(null);
+  const [distance, setDistance] = useState<number | null>(null);
+  const [isRinging, setIsRinging] = useState<boolean>(false);
+  const [permissionStatus, setPermissionStatus] = useState<string>('prompt');
+  const [error, setError] = useState<string>('');
 
-  // Refs para APIs nativas
-  const watchIdRef = useRef(null);
-  const audioCtxRef = useRef(null);
-  const alarmIntervalRef = useRef(null);
-  const wakeLockRef = useRef(null);
+  const watchIdRef = useRef<number | null>(null);
+  const audioCtxRef = useRef<any>(null);
+  const alarmIntervalRef = useRef<any>(null);
+  const wakeLockRef = useRef<any>(null);
 
-  // Verificar permissões ao carregar
   useEffect(() => {
     if ('permissions' in navigator) {
-      navigator.permissions.query({ name: 'geolocation' }).then((result) => {
+      navigator.permissions.query({ name: 'geolocation' as PermissionName }).then((result) => {
         setPermissionStatus(result.state);
         result.onchange = () => setPermissionStatus(result.state);
-      });
+      }).catch(() => {});
     }
   }, []);
 
-  // Obter localização inicial para centrar o mapa antes de iniciar o alarme
   useEffect(() => {
     if (permissionStatus === 'granted' && !currentLocation && !isTracking) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => setCurrentLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
-        (err) => console.warn('Aviso de localização prévia:', err)
+        (pos: GeolocationPosition) => setCurrentLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+        (err: GeolocationPositionError) => console.warn('Aviso de localização prévia:', err)
       );
     }
   }, [permissionStatus, isTracking, currentLocation]);
@@ -189,7 +199,7 @@ export default function App() {
   const requestWakeLock = async () => {
     try {
       if ('wakeLock' in navigator) {
-        wakeLockRef.current = await navigator.wakeLock.request('screen');
+        wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
       }
     } catch (err) {
       console.warn('Wake Lock não suportado ou bloqueado:', err);
@@ -203,8 +213,11 @@ export default function App() {
     }
   };
 
-  const handleSearch = async (e) => {
-    e.preventDefault();
+  const handleSearch = async (e?: any) => {
+    if (e && typeof e.preventDefault === 'function') {
+      e.preventDefault();
+    }
+    
     if (!searchQuery.trim()) return;
 
     setIsSearching(true);
@@ -223,7 +236,7 @@ export default function App() {
     }
   };
 
-  const selectDestination = (place) => {
+  const selectDestination = (place: Place) => {
     setDestination({
       name: place.display_name,
       lat: parseFloat(place.lat),
@@ -239,7 +252,7 @@ export default function App() {
     setIsRinging(true);
 
     if (!audioCtxRef.current) {
-      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      audioCtxRef.current = new ((window as any).AudioContext || (window as any).webkitAudioContext)();
     }
     const ctx = audioCtxRef.current;
     if (ctx.state === 'suspended') ctx.resume();
@@ -283,7 +296,9 @@ export default function App() {
   };
 
   const startTracking = () => {
-    if (!destination) {
+    const activeDestination = destination;
+    
+    if (!activeDestination) {
       setError('Por favor, selecione um destino primeiro.');
       return;
     }
@@ -292,9 +307,8 @@ export default function App() {
       return;
     }
 
-    // Inicializar áudio com interação do utilizador (Requisito do Chrome)
     if (!audioCtxRef.current) {
-      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      audioCtxRef.current = new ((window as any).AudioContext || (window as any).webkitAudioContext)();
     }
     audioCtxRef.current.resume();
 
@@ -303,19 +317,19 @@ export default function App() {
     requestWakeLock();
 
     watchIdRef.current = navigator.geolocation.watchPosition(
-      (position) => {
+      (position: GeolocationPosition) => {
         const { latitude, longitude } = position.coords;
         setCurrentLocation({ lat: latitude, lon: longitude });
-        setPermissionStatus('granted'); // Atualiza estado se aceito agora
+        setPermissionStatus('granted');
 
-        const currentDist = calculateDistance(latitude, longitude, destination.lat, destination.lon);
+        const currentDist = calculateDistance(latitude, longitude, activeDestination.lat, activeDestination.lon);
         setDistance(currentDist);
 
         if (currentDist <= radius) {
           startAlarm();
         }
       },
-      (err) => {
+      (err: GeolocationPositionError) => {
         let errorMsg = 'Erro de GPS.';
         if (err.code === 1) errorMsg = 'Permissão de localização negada pelo utilizador ou navegador.';
         if (err.code === 2) errorMsg = 'Posição GPS indisponível no momento.';
@@ -334,15 +348,14 @@ export default function App() {
     return () => stopAlarm();
   }, []);
 
-  const formatDistance = (meters) => {
+  const formatDistance = (meters: number | null): string => {
     if (meters === null) return '--';
     if (meters < 1000) return `${Math.round(meters)} m`;
     return `${(meters / 1000).toFixed(2)} km`;
   };
 
-  // Coordenadas padrão de Lisboa caso não haja localização
-  const defaultCenter = [38.7223, -9.1393];
-  const mapCenter = isTracking && currentLocation 
+  const defaultCenter: [number, number] = [38.7223, -9.1393];
+  const mapCenter: [number, number] = isTracking && currentLocation 
     ? [currentLocation.lat, currentLocation.lon] 
     : destination 
       ? [destination.lat, destination.lon] 
@@ -352,8 +365,6 @@ export default function App() {
 
   return (
     <div className="relative h-screen w-full bg-slate-100 overflow-hidden flex flex-col">
-      
-      {/* MAPA DE FUNDO */}
       <div className="absolute inset-0 z-0">
         <NativeLeafletMap 
           mapCenter={mapCenter}
@@ -364,7 +375,6 @@ export default function App() {
         />
       </div>
 
-      {/* OVERLAY: TELA DE ALARME (Z-INDEX ALTO) */}
       {isRinging && (
         <div className="absolute inset-0 z-50 bg-red-600/90 backdrop-blur-sm flex flex-col items-center justify-center p-6 animate-pulse">
           <BellRing size={100} className="text-white animate-bounce mb-6" />
@@ -381,11 +391,8 @@ export default function App() {
         </div>
       )}
 
-      {/* UI FLUTUANTE SOBRE O MAPA */}
       {!isRinging && (
         <div className="relative z-10 flex flex-col h-full pointer-events-none">
-          
-          {/* Header */}
           <div className="pt-6 pb-2 px-4 flex justify-center pointer-events-auto drop-shadow-md">
             <div className="bg-white/90 backdrop-blur-md px-6 py-3 rounded-full flex items-center gap-2 border border-slate-200">
               <MapIcon className="text-blue-600" size={24} />
@@ -393,13 +400,11 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex-grow"></div> {/* Espaçador flexível */}
+          <div className="flex-grow"></div>
 
-          {/* Bottom Sheet / Painel de Controlo */}
           <div className="bg-white rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.1)] pointer-events-auto border-t border-slate-200 w-full max-w-xl mx-auto pb-safe">
             <div className="p-6">
               
-              {/* Alerta de Permissão */}
               {permissionStatus === 'denied' && (
                 <div className="bg-red-50 text-red-700 p-3 rounded-xl flex gap-2 items-start mb-4 border border-red-200 text-sm">
                   <AlertTriangle size={18} className="shrink-0 mt-0.5" />
@@ -413,10 +418,8 @@ export default function App() {
                 </div>
               )}
 
-              {/* MODO CONFIGURAÇÃO */}
               {!isTracking ? (
                 <div className="space-y-4">
-                  {/* Busca */}
                   <div className="relative">
                     <input
                       type="text"
@@ -428,7 +431,7 @@ export default function App() {
                     />
                     <Search className="absolute left-4 top-4 text-slate-400" size={20} />
                     <button 
-                      onClick={handleSearch}
+                      onClick={(e) => handleSearch(e)}
                       disabled={isSearching}
                       className="absolute right-2 top-2 p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
                     >
@@ -436,7 +439,6 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* Resultados */}
                   {searchResults.length > 0 && (
                     <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden max-h-48 overflow-y-auto shadow-lg absolute z-20 w-[calc(100%-3rem)] max-w-[calc(36rem-3rem)] bottom-full mb-2">
                       {searchResults.map((place, idx) => (
@@ -452,7 +454,6 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* Destino Selecionado */}
                   {destination && (
                     <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 relative">
                       <button 
@@ -466,7 +467,6 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* Raio */}
                   {destination && (
                     <div className="space-y-3 pt-2">
                       <div className="flex justify-between items-center">
@@ -489,7 +489,6 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* Botão de Iniciar */}
                   <button
                     onClick={startTracking}
                     disabled={!destination}
@@ -503,7 +502,6 @@ export default function App() {
                   </button>
                 </div>
               ) : (
-                /* MODO RASTREAMENTO ATIVO */
                 <div className="space-y-6">
                   <div className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-100">
                     <div>
